@@ -40,6 +40,7 @@ import {
   TURN_ON_CAPTION_STATUS,
   type MeetingTranscriptPayload,
 } from '@webex/internal-plugin-voicea';
+import {IceCandidateErrorEvent} from '@webex/internal-media-core/dist/types/MediaConnection/eventTypes';
 import {processNewCaptions} from './voicea-meeting';
 
 import {
@@ -6003,6 +6004,19 @@ export default class Meeting extends StatelessWebexPlugin {
             mediaContent,
           }
         );
+      }
+    );
+
+    this.mediaProperties.webrtcMediaConnection.on(
+      Event.ICE_CANDIDATE_ERROR,
+      (event: IceCandidateErrorEvent) => {
+        const {errorCode, errorText} = event.error;
+
+        Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.ICE_CANDIDATE_ERROR, {
+          correlation_id: this.correlationId,
+          ice_candidate_error_code: errorCode,
+          ice_candidate_error_message: errorText,
+        });
       }
     );
   };

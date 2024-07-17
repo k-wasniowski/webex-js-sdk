@@ -45,6 +45,7 @@ const BEHAVIORAL_METRICS = {
   ROAP_GLARE_CONDITION: 'js_sdk_roap_glar_condition',
   PEERCONNECTION_FAILURE: 'js_sdk_peerConnection_failures',
   INVALID_ICE_CANDIDATE: 'js_sdk_invalid_ice_candidate',
+  ICE_CANDIDATE_ERROR: 'js_sdk_ice_candidate_error',
   UPLOAD_LOGS_FAILURE: 'js_sdk_upload_logs_failure',
   UPLOAD_LOGS_SUCCESS: 'js_sdk_upload_logs_success',
   RECEIVE_TRANSCRIPTION_FAILURE: 'js_sdk_receive_transcription_failure',
