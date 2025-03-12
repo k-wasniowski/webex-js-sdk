@@ -165,6 +165,9 @@ import JoinWebinarError from '../common/errors/join-webinar-error';
 import Member from '../member';
 import MultistreamNotSupportedError from '../common/errors/multistream-not-supported-error';
 import JoinForbiddenError from '../common/errors/join-forbidden-error';
+import BrowserDetection from '../common/browser-detection';
+
+const {isBrowser} = BrowserDetection();
 
 // default callback so we don't call an undefined function, but in practice it should never be used
 const DEFAULT_ICE_PHASE_CALLBACK = () => 'JOIN_MEETING_FINAL';
@@ -3349,6 +3352,10 @@ export default class Meeting extends StatelessWebexPlugin {
     // The second on is if the audio is muted, we need to tell the statsAnalyzer when
     // the audio is muted or the user is not willing to send media
     this.locusInfo.on(LOCUSINFO.EVENTS.MEDIA_STATUS_CHANGE, (status) => {
+      LoggerProxy.logger.info(
+        'Meeting:index#setUpLocusInfoSelfListener --> MEDIA_STATUS_CHANGE received, processing...'
+      );
+
       if (this.statsAnalyzer) {
         this.statsAnalyzer.updateMediaStatus({
           actual: status,
@@ -7008,8 +7015,6 @@ export default class Meeting extends StatelessWebexPlugin {
     this.addMediaData.retriedWithTurnServer = true;
     const LOG_HEADER = 'Meeting:index#addMedia():retryWithForcedTurnDiscovery -->';
 
-    await this.cleanUpBeforeRetryWithTurnServer();
-
     Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.ADD_MEDIA_RETRY, {
       correlation_id: this.correlationId,
       state: this.state,
@@ -7246,19 +7251,20 @@ export default class Meeting extends StatelessWebexPlugin {
     this.createStatsAnalyzer();
   }
 
-  /**
-   * Sends stats report, closes peer connection and cleans up any media connection
-   * related things before trying to establish media connection again with turn server
-   *
-   * @private
-   * @returns {Promise<void>}
-   */
-  private async cleanUpBeforeRetryWithTurnServer(): Promise<void> {
-    // when media fails, we want to upload a webrtc dump to see whats going on
-    // this function is async, but returns once the stats have been gathered
-    await this.forceSendStatsReport({callFrom: 'cleanUpBeforeRetryWithTurnServer'});
+  private async cleanUpBeforeReconnection(): Promise<void> {
+    try {
+      LoggerProxy.logger.error(
+        'Meeting:index#cleanUpBeforeReconnection --> Doing clean up before reconnection'
+      );
 
-    if (this.mediaProperties.webrtcMediaConnection) {
+      // when media fails, we want to upload a webrtc dump to see whats going on
+      // this function is async, but returns once the stats have been gathered
+      await this.forceSendStatsReport({callFrom: 'cleanUpBeforeReconnection'});
+
+      if (this.statsAnalyzer) {
+        await this.statsAnalyzer.stopAnalyzer();
+      }
+
       if (this.remoteMediaManager) {
         this.remoteMediaManager.stop();
         this.remoteMediaManager = null;
@@ -7269,22 +7275,14 @@ export default class Meeting extends StatelessWebexPlugin {
       );
 
       this.receiveSlotManager.reset();
-      this.mediaProperties.webrtcMediaConnection.close();
+      
+      if (this.mediaProperties.webrtcMediaConnection) {
+        this.mediaProperties.webrtcMediaConnection.close();
+      }
+      
       this.sendSlotManager.reset();
 
       this.mediaProperties.unsetPeerConnection();
-    }
-  }
-
-  private async cleanUpBeforeReconnection(): Promise<void> {
-    try {
-      // when media fails, we want to upload a webrtc dump to see whats going on
-      // this function is async, but returns once the stats have been gathered
-      await this.forceSendStatsReport({callFrom: 'cleanUpBeforeReconnection'});
-
-      if (this.statsAnalyzer) {
-        await this.statsAnalyzer.stopAnalyzer();
-      }
     } catch (error) {
       LoggerProxy.logger.error(
         'Meeting:index#cleanUpBeforeReconnection --> Error during cleanup: ',
@@ -7375,9 +7373,6 @@ export default class Meeting extends StatelessWebexPlugin {
 
     if (MeetingUtil.isUserInLeftState(this.locusInfo)) {
       throw new UserNotJoinedError();
-    }
-
-    const {
       localStreams,
       audioEnabled = true,
       videoEnabled = true,
@@ -9292,3 +9287,4 @@ export default class Meeting extends StatelessWebexPlugin {
     return Promise.resolve();
   }
 }
+

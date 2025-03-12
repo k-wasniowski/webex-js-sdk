@@ -321,6 +321,8 @@ export default class ReconnectionManager {
       throw new ReconnectionNotStartedError();
     }
 
+    // cleanup
+
     try {
       this.status = RECONNECTION.STATE.IN_PROGRESS;
 
