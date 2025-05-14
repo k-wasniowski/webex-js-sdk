@@ -164,6 +164,7 @@ import Member from '../member';
 import {BrbState, createBrbState} from './brbState';
 import MultistreamNotSupportedError from '../common/errors/multistream-not-supported-error';
 import JoinForbiddenError from '../common/errors/join-forbidden-error';
+import {ReachabilityMetrics} from '../reachability/reachability.types';
 
 // default callback so we don't call an undefined function, but in practice it should never be used
 const DEFAULT_ICE_PHASE_CALLBACK = () => 'JOIN_MEETING_FINAL';
@@ -7769,14 +7770,10 @@ export default class Meeting extends StatelessWebexPlugin {
 
       const {connectionType, selectedCandidatePairChanges, numTransports} =
         await this.mediaProperties.getCurrentConnectionInfo();
-      // @ts-ignore
-      const reachabilityStats = await this.webex.meetings.reachability.getReachabilityMetrics();
-      const iceCandidateErrors = Object.fromEntries(this.iceCandidateErrors);
 
-      // @ts-ignore
-      const isSubnetReachable = this.webex.meetings.reachability.isSubnetReachable(
-        this.mediaServerIp
-      );
+      const reachabilityMetrics = this.getMediaReachabilityMetricFields();
+
+      const iceCandidateErrors = Object.fromEntries(this.iceCandidateErrors);
 
       Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.ADD_MEDIA_SUCCESS, {
         correlation_id: this.correlationId,
@@ -7787,8 +7784,7 @@ export default class Meeting extends StatelessWebexPlugin {
         isMultistream: this.isMultistream,
         retriedWithTurnServer: this.addMediaData.retriedWithTurnServer,
         isJoinWithMediaRetry: this.joinWithMediaRetryInfo.isRetry,
-        isSubnetReachable,
-        ...reachabilityStats,
+        ...reachabilityMetrics,
         ...iceCandidateErrors,
         iceCandidatesCount: this.iceCandidatesCount,
       });
@@ -7809,18 +7805,12 @@ export default class Meeting extends StatelessWebexPlugin {
     } catch (error) {
       LoggerProxy.logger.error(`${LOG_HEADER} failed to establish media connection: `, error);
 
-      // @ts-ignore
-      const reachabilityMetrics = await this.webex.meetings.reachability.getReachabilityMetrics();
+      const reachabilityMetrics = this.getMediaReachabilityMetricFields();
 
       const {selectedCandidatePairChanges, numTransports} =
         await this.mediaProperties.getCurrentConnectionInfo();
 
       const iceCandidateErrors = Object.fromEntries(this.iceCandidateErrors);
-
-      // @ts-ignore
-      const isSubnetReachable = this.webex.meetings.reachability.isSubnetReachable(
-        this.mediaServerIp
-      );
 
       Metrics.sendBehavioralMetric(BEHAVIORAL_METRICS.ADD_MEDIA_FAILURE, {
         correlation_id: this.correlationId,
@@ -7851,7 +7841,6 @@ export default class Meeting extends StatelessWebexPlugin {
           this.mediaProperties.webrtcMediaConnection?.mediaConnection?.pc?.iceConnectionState ||
           'unknown',
         ...reachabilityMetrics,
-        isSubnetReachable,
         ...iceCandidateErrors,
         iceCandidatesCount: this.iceCandidatesCount,
       });
@@ -9621,5 +9610,27 @@ export default class Meeting extends StatelessWebexPlugin {
     }
 
     return Promise.resolve();
+  }
+
+  private async getMediaReachabilityMetricFields() {
+    // @ts-ignore
+    const reachabilityMetrics = await this.webex.meetings.reachability.getReachabilityMetrics();
+    const reachedSubnetsCount = ['udp', 'tcp', 'xtls'].reduce((acc, type) => {
+      const propertyName = `reachability_public_${type}_success`;
+
+      return acc + (reachabilityMetrics[propertyName] || 0);
+    }, 0);
+    let isSubnetReachable = null;
+    if (reachedSubnetsCount > 0) {
+      // @ts-ignore
+      isSubnetReachable = await this.webex.meetings.reachability.isSubnetReachable(
+        this.mediaServerIp
+      );
+    }
+
+    return {
+      ...reachabilityMetrics,
+      reachedSubnetsCount,
+    };
   }
 }
