@@ -140,22 +140,14 @@ export default class Reachability extends EventsScope {
 
   /**
    * Checks if the given subnet is reachable
-   * @param {string} mediaServerIp - media server ip
+   * @param {string} mediaServerSubnetFirstOctet - media server ip
    * @returns {boolean | null} true if reachable, false if not reachable, null if mediaServerIp is not provided
    * @public
    * @memberof Reachability
    */
-  public isSubnetReachable(mediaServerIp?: string): boolean | null {
-    if (!mediaServerIp) {
-      LoggerProxy.logger.error(`Reachability:index#isSubnetReachable --> mediaServerIp is null`);
-
-      return null;
-    }
-
-    const subnetFirstOctet = mediaServerIp.split('.')[0];
-
+  public isSubnetReachable(mediaServerSubnetFirstOctet: string): boolean | null {
     LoggerProxy.logger.info(
-      `Reachability:index#isSubnetReachable --> Looking for subnet: ${subnetFirstOctet}.X.X.X`
+      `Reachability:index#isSubnetReachable --> Looking for subnet: ${mediaServerSubnetFirstOctet}.X.X.X`
     );
 
     const matchingReachedClusters = Object.values(this.clusterReachability).reduce(
@@ -167,7 +159,7 @@ export default class Reachability extends EventsScope {
           const subnet = reachedSubnetsArray[i];
           const reachedSubnetFirstOctet = subnet.split('.')[0];
 
-          if (subnetFirstOctet === reachedSubnetFirstOctet) {
+          if (mediaServerSubnetFirstOctet === reachedSubnetFirstOctet) {
             acc.add(cluster.name);
           }
 
@@ -186,7 +178,7 @@ export default class Reachability extends EventsScope {
     );
 
     LoggerProxy.logger.info(
-      `Reachability:index#isSubnetReachable --> Found ${matchingReachedClusters.size} clusters that use the subnet ${subnetFirstOctet}.X.X.X`
+      `Reachability:index#isSubnetReachable --> Found ${matchingReachedClusters.size} clusters that use the subnet ${mediaServerSubnetFirstOctet}.X.X.X`
     );
 
     return matchingReachedClusters.size > 0;
